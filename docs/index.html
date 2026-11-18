@@ -106,6 +106,32 @@
     let garageData = { cars: [] };
     let lastFoundPart = null;
 
+    function decodeBase64Utf8(b64) {
+        const norm = b64.replace(/-/g, '+').replace(/_/g, '/');
+        const binStr = atob(norm);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        return new TextDecoder().decode(bytes);
+    }
+
+    function checkUrlImport() {
+        const hash = window.location.hash || '';
+        if (hash.startsWith('#import=')) {
+            try {
+                const encoded = hash.slice('#import='.length);
+                const imported = JSON.parse(decodeBase64Utf8(encoded));
+                if (imported && Array.isArray(imported.cars) && imported.cars.length > 0) {
+                    garageData.cars = imported.cars;
+                    saveStorage();
+                    history.replaceState(null, '', window.location.pathname);
+                    tg.showAlert(`✅ Перенесено машин из бота: ${imported.cars.length} шт.!`);
+                }
+            } catch (e) {
+                tg.showAlert('Ошибка импорта: ' + e.message);
+            }
+        }
+    }
+
     function loadStorage(callback) {
         if (tg.CloudStorage) {
             tg.CloudStorage.getItems(['garage_v1', 'groq_key'], (err, values) => {
@@ -361,7 +387,10 @@
         }
     }
 
-    loadStorage(renderGarage);
+    loadStorage(() => {
+        checkUrlImport();
+        renderGarage();
+    });
 </script>
 </body>
 </html>
