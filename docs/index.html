@@ -107,7 +107,11 @@
     let lastFoundPart = null;
 
     function decodeBase64Utf8(b64) {
-        const norm = b64.replace(/-/g, '+').replace(/_/g, '/');
+        let clean = decodeURIComponent(b64).split('&')[0].split('#')[0].trim();
+        let norm = clean.replace(/-/g, '+').replace(/_/g, '/');
+        while (norm.length % 4 !== 0) {
+            norm += '=';
+        }
         const binStr = atob(norm);
         const bytes = new Uint8Array(binStr.length);
         for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
@@ -115,11 +119,11 @@
     }
 
     function checkUrlImport() {
-        const hash = window.location.hash || '';
-        if (hash.startsWith('#import=')) {
+        const fullUrl = window.location.href;
+        const match = fullUrl.match(/[#?&]import=([^&#]+)/);
+        if (match && match[1]) {
             try {
-                const encoded = hash.slice('#import='.length);
-                const imported = JSON.parse(decodeBase64Utf8(encoded));
+                const imported = JSON.parse(decodeBase64Utf8(match[1]));
                 if (imported && Array.isArray(imported.cars) && imported.cars.length > 0) {
                     garageData.cars = imported.cars;
                     saveStorage();
