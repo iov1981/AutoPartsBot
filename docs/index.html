@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Мой Гараж — Запчасти</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg: var(--tg-theme-bg-color, #17212b);
+            --sec-bg: var(--tg-theme-secondary-bg-color, #232e3c);
+            --text: var(--tg-theme-text-color, #f5f5f5);
+            --hint: var(--tg-theme-hint-color, #708499);
+            --btn: var(--tg-theme-button-color, #5288c1);
+            --btn-text: var(--tg-theme-button-text-color, #ffffff);
+            --danger: #e53935;
+            --success: #4caf50;
+        }
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text); margin: 0; padding: 14px; padding-bottom: 40px; }
+        h2, h3 { margin: 0 0 10px 0; }
+        .card { background: var(--sec-bg); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+        .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .badge { background: rgba(82, 136, 193, 0.2); color: var(--btn); padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .price-badge { background: rgba(76, 175, 80, 0.18); color: var(--success); padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+        .mono { font-family: monospace; background: rgba(0,0,0,0.25); padding: 4px 7px; border-radius: 6px; font-size: 13px; cursor: pointer; display: inline-block; margin: 2px 0; }
+        input, select {
+            width: 100%; padding: 10px 12px; margin-bottom: 10px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1); background: var(--bg); color: var(--text); font-size: 14px;
+        }
+        button {
+            width: 100%; padding: 11px; border: none; border-radius: 10px;
+            background: var(--btn); color: var(--btn-text); font-size: 14px; font-weight: 600; cursor: pointer;
+        }
+        button.secondary { background: rgba(255,255,255,0.08); color: var(--text); margin-top: 6px; }
+        button.danger { background: rgba(229, 57, 53, 0.15); color: var(--danger); width: auto; padding: 5px 9px; font-size: 12px; }
+        button:disabled { opacity: 0.5; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+        .tab { flex: 1; padding: 9px; text-align: center; border-radius: 10px; background: var(--sec-bg); color: var(--hint); font-weight: 600; font-size: 13px; cursor: pointer; }
+        .tab.active { background: var(--btn); color: var(--btn-text); }
+        .hidden { display: none; }
+        .hint { color: var(--hint); font-size: 12px; margin-bottom: 8px; }
+        .part-item { border-top: 1px solid rgba(255,255,255,0.07); padding-top: 10px; margin-top: 10px; }
+        .shop-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+        .shop-btn {
+            font-size: 11px; padding: 4px 8px; border-radius: 6px; text-decoration: none;
+            background: rgba(255,255,255,0.08); color: var(--text); font-weight: 600;
+        }
+        .total-bar {
+            background: rgba(76, 175, 80, 0.12); border: 1px solid rgba(76, 175, 80, 0.3);
+            padding: 8px 12px; border-radius: 8px; margin-top: 10px; font-size: 13px; font-weight: 600;
+            display: flex; justify-content: space-between;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="tabs">
+        <div class="tab active" id="tab-btn-garage" onclick="switchTab('garage')">🚘 Гараж</div>
+        <div class="tab" id="tab-btn-search" onclick="switchTab('search')">🔍 Поиск + Цены</div>
+        <div class="tab" id="tab-btn-settings" onclick="switchTab('settings')">⚙️ Ключ API</div>
+    </div>
+
+    <!-- ВКЛАДКА 1: ГАРАЖ -->
+    <div id="tab-garage">
+        <div class="card">
+            <h3>➕ Добавить авто</h3>
+            <input id="car-model" placeholder="Модель, год, мотор (напр. VW Golf Mk4 1.4 AHW)">
+            <input id="car-vin" placeholder="VIN или номер кузова">
+            <input id="car-engine" placeholder="Номер двигателя (напр. AHW259102)">
+            <input id="car-plate" placeholder="Госномер (напр. К665ТУ58)">
+            <button onclick="addCar()">Сохранить машину</button>
+        </div>
+
+        <div id="cars-list"></div>
+    </div>
+
+    <!-- ВКЛАДКА 2: ПОИСК ЗАПЧАСТЕЙ С ЦЕНАМИ -->
+    <div id="tab-search" class="hidden">
+        <div class="card">
+            <h3>🔍 Подбор оригинала, аналогов и цен</h3>
+            <div class="hint">Выбери автомобиль из гаража:</div>
+            <select id="search-car-select"></select>
+            <input id="part-query" placeholder="Что ищем? (напр. масляный фильтр, колодки)">
+            <button id="btn-search" onclick="searchPart()">Найти артикулы и цены</button>
+        </div>
+
+        <div id="search-result" class="card hidden"></div>
+    </div>
+
+    <!-- ВКЛАДКА 3: НАСТРОЙКИ API -->
+    <div id="tab-settings" class="hidden">
+        <div class="card">
+            <h3>🔑 Бесплатный Groq API Key</h3>
+            <div class="hint">Ключ сохраняется локально в памяти твоего Telegram и нужен для поиска запчастей прямо из Mini App, даже когда ПК выключен.</div>
+            <input id="api-key-input" type="password" placeholder="Вставь ключ gsk_...">
+            <button onclick="saveApiKey()">Сохранить ключ</button>
+        </div>
+    </div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    let garageData = { cars: [] };
+    let lastFoundPart = null;
+
+    function loadStorage(callback) {
+        if (tg.CloudStorage) {
+            tg.CloudStorage.getItems(['garage_v1', 'groq_key'], (err, values) => {
+                if (!err && values) {
+                    if (values.garage_v1) {
+                        try { garageData = JSON.parse(values.garage_v1); } catch (e) {}
+                    }
+                    if (values.groq_key) {
+                        document.getElementById('api-key-input').value = values.groq_key;
+                    }
+                }
+                callback();
+            });
+        } else {
+            const local = localStorage.getItem('garage_v1');
+            if (local) garageData = JSON.parse(local);
+            document.getElementById('api-key-input').value = localStorage.getItem('groq_key') || '';
+            callback();
+        }
+    }
+
+    function saveStorage() {
+        const raw = JSON.stringify(garageData);
+        if (tg.CloudStorage) {
+            tg.CloudStorage.setItem('garage_v1', raw);
+        }
+        localStorage.setItem('garage_v1', raw);
+        renderGarage();
+    }
+
+    function saveApiKey() {
+        const key = document.getElementById('api-key-input').value.trim();
+        if (tg.CloudStorage) tg.CloudStorage.setItem('groq_key', key);
+        localStorage.setItem('groq_key', key);
+        tg.showAlert('✅ Ключ API сохранен!');
+    }
+
+    function switchTab(tabName) {
+        ['garage', 'search', 'settings'].forEach(t => {
+            document.getElementById('tab-' + t).classList.add('hidden');
+            document.getElementById('tab-btn-' + t).classList.remove('active');
+        });
+        document.getElementById('tab-' + tabName).classList.remove('hidden');
+        document.getElementById('tab-btn-' + tabName).classList.add('active');
+        if (tabName === 'search') updateCarSelect();
+    }
+
+    function copyText(text) {
+        navigator.clipboard.writeText(text);
+        if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        tg.showAlert('Скопировано: ' + text);
+    }
+
+    function buildShopLinks(article) {
+        const q = encodeURIComponent(article);
+        return `
+            <div class="shop-links">
+                <a class="shop-btn" href="https://exist.ru/Price/?pcode=${q}" target="_blank">Exist</a>
+                <a class="shop-btn" href="https://www.autodoc.ru/price/0/${q}" target="_blank">Autodoc</a>
+                <a class="shop-btn" href="https://emex.ru/f?detailNum=${q}" target="_blank">Emex</a>
+                <a class="shop-btn" href="https://baza.drom.ru/sell_spare_parts/?query=${q}" target="_blank">Дром</a>
+            </div>
+        `;
+    }
+
+    function addCar() {
+        const model = document.getElementById('car-model').value.trim();
+        if (!model) return tg.showAlert('Введи модель автомобиля!');
+        const car = {
+            id: Date.now(),
+            model: model,
+            vin: document.getElementById('car-vin').value.trim().toUpperCase() || 'Не указан',
+            engine: document.getElementById('car-engine').value.trim().toUpperCase() || 'Не указан',
+            plate: document.getElementById('car-plate').value.trim().toUpperCase() || 'Без номера',
+            parts: []
+        };
+        garageData.cars.push(car);
+        saveStorage();
+        ['car-model', 'car-vin', 'car-engine', 'car-plate'].forEach(id => document.getElementById(id).value = '');
+        tg.showAlert('✅ Машина добавлена в гараж!');
+    }
+
+    function deleteCar(carId) {
+        garageData.cars = garageData.cars.filter(c => c.id !== carId);
+        saveStorage();
+    }
+
+    function deletePart(carId, partIdx) {
+        const car = garageData.cars.find(c => c.id === carId);
+        if (car) {
+            car.parts.splice(partIdx, 1);
+            saveStorage();
+        }
+    }
+
+    function renderGarage() {
+        const container = document.getElementById('cars-list');
+        if (!garageData.cars.length) {
+            container.innerHTML = '<div class="hint" style="text-align:center;">В гараже пока пусто. Добавь первую машину выше.</div>';
+            return;
+        }
+        container.innerHTML = garageData.cars.map(car => {
+            const totalSum = car.parts.reduce((acc, p) => acc + (Number(p.price) || 0), 0);
+            return `
+            <div class="card">
+                <div class="row">
+                    <strong>🚘 ${car.model}</strong>
+                    <span class="badge">${car.plate}</span>
+                </div>
+                <div style="margin-top:8px;">
+                    <div class="hint">Нажми на номер, чтобы скопировать:</div>
+                    <div>VIN: <span class="mono" onclick="copyText('${car.vin}')">${car.vin}</span></div>
+                    <div>ДВС: <span class="mono" onclick="copyText('${car.engine}')">${car.engine}</span></div>
+                </div>
+                ${car.parts.length ? `<div style="margin-top:10px;"><strong>📋 Блокнот запчастей (${car.parts.length}):</strong>` +
+                    car.parts.map((p, idx) => `
+                        <div class="part-item">
+                            <div class="row">
+                                <span>🔹 <b>${p.query}</b></span>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    ${p.price ? `<span class="price-badge">${p.price} ₽</span>` : ''}
+                                    <button class="danger" onclick="deletePart(${car.id}, ${idx})">✕</button>
+                                </div>
+                            </div>
+                            <div>OEM: <span class="mono" onclick="copyText('${p.oem}')">${p.oem}</span></div>
+                            <div class="hint" style="margin-top:4px;">Аналоги: ${p.analogs}</div>
+                        </div>
+                    `).join('') +
+                    (totalSum > 0 ? `<div class="total-bar"><span>Итого по списку:</span><span>${totalSum.toLocaleString('ru-RU')} ₽</span></div>` : '') +
+                `</div>` : ''}
+                <button class="secondary" style="color:var(--danger); margin-top:12px;" onclick="deleteCar(${car.id})">🗑 Удалить авто</button>
+            </div>
+        `}).join('');
+    }
+
+    function updateCarSelect() {
+        const sel = document.getElementById('search-car-select');
+        if (!garageData.cars.length) {
+            sel.innerHTML = '<option value="">Сначала добавь машину в гараже</option>';
+            return;
+        }
+        sel.innerHTML = garageData.cars.map(c => `<option value="${c.id}">[${c.plate}] ${c.model}</option>`).join('');
+    }
+
+    async function searchPart() {
+        const carId = Number(document.getElementById('search-car-select').value);
+        const query = document.getElementById('part-query').value.trim();
+        const apiKey = document.getElementById('api-key-input').value.trim();
+
+        if (!carId) return tg.showAlert('Выбери машину!');
+        if (!query) return tg.showAlert('Напиши название запчасти!');
+        if (!apiKey) {
+            tg.showAlert('Сначала вставь бесплатный Groq API ключ во вкладке «⚙️ Ключ API»!');
+            return;
+        }
+
+        const car = garageData.cars.find(c => c.id === carId);
+        const btn = document.getElementById('btn-search');
+        const resBox = document.getElementById('search-result');
+        btn.disabled = true;
+        btn.innerText = '⚙️ Ищу артикулы и цены...';
+        resBox.classList.add('hidden');
+
+        try {
+            const prompt = (
+                `Автомобиль: ${car.model}. VIN: ${car.vin}. Двигатель: ${car.engine}. ` +
+                `Нужная запчасть: ${query}. ` +
+                `Подбери точный оригинальный артикул (OEM), его примерную среднюю цену в рублях (числом), ` +
+                `а также 3-4 лучших аналога с указанием бренда, артикула и примерной цены в рублях. ` +
+                `Верни ответ СТРОГО в JSON: ` +
+                `{"oem_code": "чистый артикул без бренда", "oem_brand": "бренд", "oem_price": 1500, ` +
+                `"analogs": [{"brand": "Mann", "code": "W 712/52", "price": 850}], "note": "совет"}`
+            );
+            const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + apiKey,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'openai/gpt-oss-120b',
+                    messages: [
+                        { role: 'system', content: 'Ты эксперт по автозапчастям и ценам на рынке РФ. Отвечай строго валидным JSON.' },
+                        { role: 'user', content: prompt }
+                    ],
+                    response_format: { type: 'json_object' },
+                    temperature: 0.2
+                })
+            });
+            const data = await resp.json();
+            const parsed = JSON.parse(data.choices[0].message.content);
+
+            const oemFull = `${parsed.oem_code} (${parsed.oem_brand})`;
+            const analogsList = parsed.analogs.map(a => `${a.brand} ${a.code} (~${a.price} ₽)`);
+            const defaultPrice = parsed.analogs[0]?.price || parsed.oem_price || '';
+
+            lastFoundPart = {
+                carId,
+                query,
+                oem: oemFull,
+                analogs: analogsList.join(', ')
+            };
+
+            resBox.innerHTML = `
+                <div class="row">
+                    <h3>💎 Оригинал (OEM):</h3>
+                    <span class="price-badge">~${parsed.oem_price} ₽</span>
+                </div>
+                <div class="mono" onclick="copyText('${parsed.oem_code}')">${oemFull}</div>
+                ${buildShopLinks(parsed.oem_code)}
+
+                <h3 style="margin-top:14px;">🔄 Аналоги:</h3>
+                ${parsed.analogs.map(a => `
+                    <div style="margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <div class="row">
+                            <span class="mono" onclick="copyText('${a.code}')">${a.brand} — ${a.code}</span>
+                            <span class="price-badge">~${a.price} ₽</span>
+                        </div>
+                        ${buildShopLinks(a.code)}
+                    </div>
+                `).join('')}
+
+                <div class="hint" style="margin-top:10px;">💡 ${parsed.note}</div>
+
+                <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
+                    <div class="hint">Уточни цену (в ₽) для сохранения в блокнот:</div>
+                    <input id="save-part-price" type="number" value="${defaultPrice}" placeholder="Цена в рублях">
+                    <button onclick="saveFoundPart()">💾 Сохранить в блокнот авто</button>
+                </div>
+            `;
+            resBox.classList.remove('hidden');
+        } catch (e) {
+            tg.showAlert('Ошибка поиска: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = 'Найти артикулы и цены';
+        }
+    }
+
+    function saveFoundPart() {
+        if (!lastFoundPart) return;
+        const priceVal = Number(document.getElementById('save-part-price').value) || 0;
+        const car = garageData.cars.find(c => c.id === lastFoundPart.carId);
+        if (car) {
+            car.parts.push({
+                query: lastFoundPart.query,
+                oem: lastFoundPart.oem,
+                analogs: lastFoundPart.analogs,
+                price: priceVal
+            });
+            saveStorage();
+            tg.showAlert('✅ Сохранено в блокнот авто!');
+        }
+    }
+
+    loadStorage(renderGarage);
+</script>
+</body>
+</html>
